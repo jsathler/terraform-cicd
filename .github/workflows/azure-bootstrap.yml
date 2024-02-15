@@ -19,7 +19,11 @@ jobs:
   tfstate-resources:
     runs-on: 'ubuntu-latest'
 
-    environment: ${{ inputs.environments }}
+    strategy:
+      max-parallel: 1
+      matrix: ${{ inputs.environments }}
+
+    environment: ${{ matrix.environment }}
 
     permissions:
       id-token: write
