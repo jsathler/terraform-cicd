@@ -1,0 +1,154 @@
+name: Terraform workflow
+description: Executes terraform init, plan and apply/destroy
+inputs:
+  tf_version:
+    description: Terraform version to be used
+    default: latest
+  action:
+    description: Action to be taken. Options are plan or apply
+    default: plan
+  destroy:
+    description: Force Terraform to destroy the infrastructure
+    default: 'false'
+  backend_storage_account_name:
+    description: TF State Storage Account name
+    required: true
+  backend_resouce_group_name:
+    description: TF State Storage Account Resource Group name
+    required: true
+  working_directory:
+    description: Terraform working directory
+    default: '.'    
+  tf_init_extra:
+    description: Extra backend-config parameters if needed such as -backend-config=file1.tfvars
+    default: ''
+  tf_plan_extra:
+    description: Extra plan parameters if needed such as -var-file=file1.tfvars or -var='key=value'
+    default: ''
+  tfplan_name:
+    description: Name of the Terraform plan file that will be created and uploaded as artifact
+    required: true    
+  universal_gh_app_id_code:
+    description: Required to access other repositories
+    default: ''    
+  universal_gh_app_private_key_code:
+    description: Required to access other repositories
+    default: ''
+
+outputs:
+  terraform-output:
+    description: Terraform Output
+    value: ${{ steps.apply.outputs.terraform-output }}
+
+runs:
+  using: 'composite'    
+
+  steps:
+    - name: Set Terraform plan mode
+      shell: bash
+      run: |
+        echo "TERRAFORM_PLAN_MODE=${{ (contains(github.event.pull_request.title,'destroy') || inputs.destroy == 'true') && 'destroy' || 'apply' }}"  >> $GITHUB_ENV
+    
+    - name: Terraform - Setup
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.tf_version }}
+        terraform_wrapper: false
+
+    - name: Add runner IP on storage account firewall
+      uses: ./.github/actions/az-storage-account-fw
+      with:
+        action: add
+        storage_account_name: ${{inputs.backend_storage_account_name}} 
+        resource_group_name: ${{inputs.backend_resouce_group_name}}
+
+    - name: Generate token for GitHub App
+      if: ${{ inputs.universal_gh_app_id_code != '' && inputs.universal_gh_app_private_key_code != '' }}
+      id: generate-token
+      uses: getsentry/action-github-app-token@v2.0.0
+      with:
+        app_id: ${{ inputs.universal_gh_app_id_code }}
+        private_key: ${{ inputs.universal_gh_app_private_key_code }}
+
+    - name: Configure GitHub over HTTPS
+      if: ${{ inputs.universal_gh_app_id_code != '' && inputs.universal_gh_app_private_key_code != '' }}
+      shell: bash
+      run: |
+        git config --global credential.helper store
+        echo 'https://GitHubApp:${{ env.GH_TOKEN }}@github.com' >> ~/.git-credentials
+      env:
+        GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+
+    - name: List contents
+      shell: bash
+      working-directory: ${{inputs.working_directory}}
+      run: |
+        ls -la
+        
+    - name: Terraform fmt
+      if: ${{ inputs.action == 'plan' || inputs.action == 'both' }}
+      shell: bash
+      working-directory: ${{inputs.working_directory}}
+      run: terraform fmt -no-color -recursive
+
+    - name: Terraform - Validate
+      if: ${{ inputs.action == 'plan' || inputs.action == 'both' }}
+      shell: bash
+      working-directory: ${{inputs.working_directory}}
+      run: |
+        terraform init -input=false -no-color -backend=false
+        terraform validate -no-color
+
+    - name: Terraform - Init
+      shell: bash
+      working-directory: ${{inputs.working_directory}}
+      run: |
+        terraform init -input=false -no-color -backend-config="resource_group_name=${{inputs.backend_resouce_group_name}}" -backend-config="storage_account_name=${{inputs.backend_storage_account_name}}" ${{ inputs.tf_init_extra == '' &&  '' || inputs.tf_init_extra }}
+
+    - name: Terraform - Plan
+      id: plan
+      shell: bash
+      working-directory: ${{inputs.working_directory}}
+      run: |         
+        terraform plan ${{ env.TERRAFORM_PLAN_MODE == 'destroy' && '-destroy' || '' }} -input=false -no-color -out=tf.plan ${{ inputs.tf_plan_extra == '' &&  '' || inputs.tf_plan_extra }} 
+
+    - name: Terraform - Show plan
+      if: ${{ inputs.action == 'plan' || inputs.action == 'both' }}
+      id: show
+      shell: bash
+      working-directory: ${{inputs.working_directory}}
+      run: |
+        echo "plan<<EOF" >> $GITHUB_OUTPUT
+        terraform show -no-color tf.plan >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        terraform show -no-color tf.plan > ${{ inputs.tfplan_name }}.txt
+
+    - name: Artifact - Upload TF Json Plan
+      if: ${{inputs.action == 'plan' || inputs.action == 'both'}}
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ inputs.tfplan_name }}.txt
+        path: ${{ inputs.working_directory }}/${{ inputs.tfplan_name }}.txt
+
+    - name: Terraform - apply
+      if: ${{inputs.action == 'apply' || inputs.action == 'both'}}
+      id: apply
+      shell: bash
+      working-directory: ${{inputs.working_directory}}
+      run: |
+        echo "apply<<EOF" >> $GITHUB_OUTPUT
+        terraform apply -input=false -no-color tf.plan | tee -a $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT      
+        {
+          echo 'terraform-output<<EOF'
+          terraform output -no-color -json
+          echo EOF
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Remove runner IP from storage account firewall
+      if: always()
+      uses: ./.github/actions/az-storage-account-fw
+      with:
+        action: remove
+        storage_account_name: ${{inputs.backend_storage_account_name}} 
+        resource_group_name: ${{inputs.backend_resouce_group_name}}

@@ -1,0 +1,143 @@
+---
+name: ⚙️ Azure tfstate Bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      environments:
+        description: The github environments to create the tfstate resources
+        type: string
+        required: true
+        default: '["dev","qa","prd"]'
+      container_name:
+        description: TFstate container name
+        type: string
+        required: true
+        default: tfstate
+        
+jobs:
+  tfstate-resources:
+    runs-on: 'ubuntu-latest'
+
+    environment: ${{ inputs.environments }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Install required powershell modules
+        shell: pwsh
+        run: |
+          Install-Module -Name Az.Resources,Az.Storage -Force   
+
+      - name: Authenticate to Azure AD
+        uses: azure/login@v1
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Create resource group
+        shell: pwsh
+        run: |
+          $ResourceGroup = Get-AzResourceGroup -Name ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -ErrorAction SilentlyContinue
+
+          if ($ResourceGroup -eq $null) {
+            $ResourceGroup = New-AzResourceGroup -Name ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -Location ${{ vars.REGION }}
+            Write-Host "Resource Group $($ResourceGroup.ResourceGroupName) created" -ForegroundColor Green
+          } else {
+            write-host "Resource Group $($ResourceGroup.ResourceGroupName) already exists" -ForegroundColor Yellow
+          }        
+
+      - name: Create storage account
+        shell: pwsh
+        run: |
+          $StorageAccount = Get-AzStorageAccount -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -Name ${{vars.BACKEND_STORAGE_ACCOUNT_NAME}} -ErrorAction SilentlyContinue
+
+          if ($StorageAccount -eq $null) {
+            $StorageAccount = New-AzStorageAccount `
+              -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} `
+              -Name ${{vars.BACKEND_STORAGE_ACCOUNT_NAME}} `
+              -Location "${{ vars.REGION }}" `
+              -SkuName Standard_GZRS `
+              -Kind StorageV2 `
+              -EnableHttpsTrafficOnly $True `
+              -MinimumTlsVersion TLS1_2 `
+              -AllowBlobPublicAccess $False
+            Write-Host "Storage Account $($StorageAccount.StorageAccountName) created" -ForegroundColor Green
+          } else {
+            Write-Host "Storage Account $($StorageAccount.StorageAccountName) already exists" -ForegroundColor Yellow
+          }
+
+      - name: Reset storage account firewall settings
+        uses: ./.github/actions/az-storage-account-fw
+        with:
+          action: reset
+          storage_account_name: ${{vars.BACKEND_STORAGE_ACCOUNT_NAME}} 
+          resource_group_name: ${{vars.BACKEND_RESOUCE_GROUP_NAME}}
+
+      - name: Add runner IP on storage account firewall
+        uses: ./.github/actions/az-storage-account-fw
+        with:
+          action: add
+          storage_account_name: ${{vars.BACKEND_STORAGE_ACCOUNT_NAME}} 
+          resource_group_name: ${{vars.BACKEND_RESOUCE_GROUP_NAME}}
+
+      - name: Enable blob versioning
+        shell: pwsh
+        run: |
+          Update-AzStorageBlobServiceProperty -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -StorageAccountName ${{vars.BACKEND_STORAGE_ACCOUNT_NAME}} -IsVersioningEnabled $true | Out-Null
+          Write-Host "Blob versioning updated" -ForegroundColor Green
+
+      - name: Create container
+        shell: pwsh
+        run: |
+          $StorageAccount = Get-AzStorageAccount -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -Name ${{vars.BACKEND_STORAGE_ACCOUNT_NAME}}
+          $Container = Get-AzStorageContainer -Name ${{ inputs.container_name }} -context $StorageAccount.context -ErrorAction SilentlyContinue
+
+          if ($Container -eq $null) {
+            $Container = New-AzStorageContainer -Name ${{ inputs.container_name }} -context $StorageAccount.context
+            Write-Host "Container $($Container.Name) created" -ForegroundColor Green
+          } else {
+            Write-Host "Container $($Container.Name) already exists" -ForegroundColor Yellow
+          }
+
+      - name: Lock Resource Group with CanNotDelete
+        shell: pwsh
+        run: |
+          $Lock = Get-AzResourceLock -LockName "TFState" -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -ErrorAction SilentlyContinue
+
+          if ($Lock -eq $null) {
+            $Lock = New-AzResourceLock -LockName "TFState" -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -LockLevel CanNotDelete -Force
+            Write-Host "Lock $($Lock.Name) created" -ForegroundColor Green
+          } else {
+            Write-Host "Lock $($Lock.Name) already exists" -ForegroundColor Yellow
+          }  
+
+      - name: Remove runner IP from storage account firewall
+        if: always()
+        uses: ./.github/actions/az-storage-account-fw
+        with:
+          action: remove
+          storage_account_name: ${{vars.BACKEND_STORAGE_ACCOUNT_NAME}} 
+          resource_group_name: ${{vars.BACKEND_RESOUCE_GROUP_NAME}} 
+
+      - name: Output Azure Terraform backend example
+        shell: pwsh
+        run: |
+          Write-Output "
+            terraform {
+                backend `"azurerm`" {
+                    resource_group_name  = `"${{vars.BACKEND_RESOUCE_GROUP_NAME}}`"
+                    storage_account_name = `"${{vars.BACKEND_STORAGE_ACCOUNT_NAME}}`"
+                    container_name       = `"${{ inputs.container_name }}`"
+                    key                  = `"/<path>/terraform.tfstate`"
+                }
+            }
+          "
+          

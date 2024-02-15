@@ -1,0 +1,204 @@
+#╔════════════════════════════╗
+#   GLOBAL WORKFLOW SETTINGS
+#╚════════════════════════════╝
+
+name: '🚀 CD'
+
+on:
+  workflow_dispatch:
+    inputs:
+      deployment:
+        description: 'Deployment type'
+        required: true
+        default: Platform
+        type: choice
+        options:
+        - Platform
+        - Shared
+      environments:
+        description: 'Environments to deploy, ex: ["d", "p"] (For Platform deployment types)'
+        required: true
+        default: '["d"]'
+        type: string
+      tf_version:
+        description: Terraform version to be used
+        required: false
+        default: latest
+        type: string
+      destroy: #Used string to force user to type 'true'
+        description: Force Terraform to destroy the infrastructure
+        type: string
+        required: no
+        default: 'false'
+
+permissions:
+  actions: write # This is required to read/write workflows, workflow runs and artifacts.
+  contents: write # This is required for actions/checkout and to read/write repository contents, commits, branches, downloads, releases, and merges.
+  id-token: write # This is required for requesting the JWT for OIDC.
+  pull-requests: write # This is required to read/write pull requests and related comments, assignees, labels, milestones, and merges.
+
+defaults:
+  run:
+    shell: bash
+
+#╔════════════════════════════════════╗
+#   GENERATE THE ENVIRONMENTS MATRIX
+#╚════════════════════════════════════╝
+
+jobs:
+  generate-matrix:
+    name: Generate Matrix
+
+    if: github.ref_name == 'main'
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      matrix: ${{ steps.generate-matrix.outputs.matrix }}
+    
+    steps:
+      - name: Checkout Working Directory
+        uses: actions/checkout@v4
+
+      - name: Generate Matrix
+        id: generate-matrix
+        run: |
+          import os
+          import json
+
+          def set_output(name, value):
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+                  print(f'{name}={value}', file=fh)
+
+          environments =  ${{ inputs.environments }}
+
+          if "${{ inputs.deployment }}" == "Platform":
+              matrix = {"include":[{"environment": e} for e in environments]}
+          elif "${{ inputs.deployment }}" == "Shared":
+              matrix = {"include":[{"environment":"m"}]}
+
+          print("The generated matrix before formatting is :")
+          print(matrix)
+          matrixjson = (json.dumps(matrix)).replace(" ", "")
+          print("The JSON formatted matrix is :")
+          print(matrixjson)
+          set_output("matrix", matrixjson)
+        shell: python
+
+#╔════════════════════╗
+#   TERRAFORM APPLY
+#╚════════════════════╝
+
+  terraform-apply:
+    name: Terraform Apply
+
+    if: github.ref_name == 'main' && contains(needs.*.result, 'success') && !(contains(needs.*.result, 'failure'))
+    
+    needs: generate-matrix
+    
+    runs-on: self-hosted
+    
+    strategy:
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+
+    environment: ${{ matrix.environment }}
+
+    env:
+      #Used by terraform
+      ARM_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.ARM_SUBSCRIPTION_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}   
+
+      #Used by sql provider (https://registry.terraform.io/providers/betr-io/mssql)
+      MSSQL_CLIENT_ID: ${{ vars.ARM_CLIENT_ID }}
+      MSSQL_TENANT_ID: ${{ vars.ARM_TENANT_ID }}
+      MSSQL_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}       
+    
+    steps:
+      - name: Install required powershell modules
+        shell: pwsh
+        run: |
+          Install-Module -Name Az.Accounts -Force     
+
+      - name: Checkout Working Directory
+        uses: actions/checkout@v4
+
+      - name: Login with Azure CLI
+        id: azure-login
+        uses: azure/login@v1
+        with:
+          creds: '{"clientId":"${{ vars.ARM_CLIENT_ID }}","clientSecret":"${{ secrets.ARM_CLIENT_SECRET }}","subscriptionId":"${{ vars.ARM_SUBSCRIPTION_ID }}","tenantId":"${{ vars.ARM_TENANT_ID }}"}'
+          enable-AzPSSession: true
+
+      - name: Prepare Values
+        id: prepare-values
+        run: |
+          if [ ${{ inputs.deployment }} == 'Platform' ]
+          then
+            WORKING_DIRECTORY=$(echo Terraform/Platform)
+            TFVARS_ENV=$(echo ${{ matrix.environment }})
+            TFPLAN_NAME=$(echo tfplan-${{ matrix.environment }})
+          elif [ ${{ inputs.deployment }} == 'Shared' ]
+          then
+            WORKING_DIRECTORY=$(echo Terraform/Shared)
+            TFVARS_ENV=$(echo ${{ matrix.environment }})
+            TFPLAN_NAME=$(echo tfplan-${{ matrix.environment }})
+          fi
+          echo The Working Directory is : $WORKING_DIRECTORY
+          echo "working_directory=$WORKING_DIRECTORY" >> $GITHUB_OUTPUT
+          echo The tfvars path is : $TFVARS_ENV
+          echo "TFVARS_ENV=$TFVARS_ENV" >> $GITHUB_OUTPUT
+          echo The terraform plan name is : $TFPLAN_NAME
+          echo "tfplan_name=$TFPLAN_NAME" >> $GITHUB_OUTPUT
+
+      - name: Terraform workflow
+        uses: ./.github/actions/terraform-workflow
+        with:
+          action: apply
+          tf_version: ${{ inputs.tf_version }}
+          destroy: ${{ inputs.destroy }}
+          working_directory: Terraform/${{ inputs.deployment }}
+          backend_storage_account_name: ${{ vars.BACKEND_STORAGE_ACCOUNT_NAME }}
+          backend_resouce_group_name: ${{ vars.BACKEND_RESOUCE_GROUP_NAME }}
+          tf_init_extra: -backend-config="./tfvars/${{ steps.prepare-values.outputs.TFVARS_ENV }}-backend.tfvars"
+          tf_plan_extra: -var-file="../global.tfvars" -var-file="./tfvars/${{ steps.prepare-values.outputs.TFVARS_ENV }}.tfvars"
+          universal_gh_app_id_code: ${{ secrets.UNIVERSAL_GH_APP_ID_CODE }}
+          universal_gh_app_private_key_code: ${{ secrets.UNIVERSAL_GH_APP_PRIVATE_KEY_CODE }}
+          tfplan_name: ${{ steps.prepare-values.outputs.tfplan_name }}
+
+#╔═════════════════════════╗
+#   CREATE GITHUB RELEASE
+#╚═════════════════════════╝
+
+  github-release:
+    name: Create GitHub Release
+
+    if: github.ref_name == 'main' && contains(needs.*.result, 'success') && !(contains(needs.*.result, 'failure'))
+
+    needs:
+      - terraform-apply
+
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Working Directory
+        uses: actions/checkout@v4
+
+      - name: Bump version and push tag
+        id: create_tag
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          release_branches: main
+          default_bump: patch
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: steps.create_tag.outputs.new_version
+        with:
+          tag_name: ${{ steps.create_tag.outputs.new_tag }}
+          name: Release ${{ steps.create_tag.outputs.new_tag }}
+          body: ${{ steps.create_tag.outputs.changelog }}
+          token: ${{ secrets.GITHUB_TOKEN }}

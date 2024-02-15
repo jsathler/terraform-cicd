@@ -1,0 +1,49 @@
+name: Manage Storage Account internet access
+description: Set storage account firewall to 'Enabled from selected virtual networks and IP addresses', add and remove runner ip
+inputs:
+  storage_account_name:
+    description: Storage account name
+    required: true
+  resource_group_name:
+    description: Resource group name
+    required: true
+  action:
+    description: Action to be taken. Options are reset, add or remove
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install required powershell modules
+      shell: pwsh
+      run: |
+        Install-Module -Name Az.Storage -Force    
+
+    - name: Get runner public IP
+      if: ${{inputs.action == 'add'}}
+      shell: bash
+      run: echo "RUNNER_IP=$(curl -s https://api.ipify.org)" >> $GITHUB_ENV
+      
+    - name: Reset storage account firewall settings
+      if: ${{inputs.action == 'reset'}}
+      shell: pwsh
+      run: |
+        Set-AzStorageAccount -ResourceGroupName ${{inputs.resource_group_name}} -Name ${{inputs.storage_account_name}} -PublicNetworkAccess Enabled | Out-Null
+        Update-AzStorageAccountNetworkRuleSet -ResourceGroupName ${{inputs.resource_group_name}} -Name ${{inputs.storage_account_name}} `
+          -ResourceAccessRule @() -VirtualNetworkRule @() -IPRule @() -DefaultAction Deny -Bypass AzureServices | Out-Null
+        Write-Host "Internet settings reseted" -ForegroundColor Green
+
+    - name: Add runner IP on storage account firewall
+      if: ${{inputs.action == 'add'}}
+      shell: pwsh
+      run: |
+        Add-AzStorageAccountNetworkRule -ResourceGroupName ${{inputs.resource_group_name}} -Name ${{inputs.storage_account_name}} -IPAddressOrRange "${{ env.RUNNER_IP }}" | Out-Null
+        sleep(60) # Required due to Azure platform delay effecting changes
+        Write-Host "IpRule added for ${{ env.RUNNER_IP }}" -ForegroundColor Green 
+
+    - name: Remove runner IP from storage account firewall
+      if: ${{inputs.action == 'remove'}}
+      shell: pwsh
+      run: |
+        Remove-AzStorageAccountNetworkRule -ResourceGroupName ${{inputs.resource_group_name}} -Name ${{inputs.storage_account_name}} -IPAddressOrRange "${{ env.RUNNER_IP }}" -ErrorAction SilentlyContinue | Out-Null
+        Write-Host "IpRule removed for ${{ env.RUNNER_IP }}" -ForegroundColor Green   
