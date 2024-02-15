@@ -21,7 +21,8 @@ jobs:
 
     strategy:
       max-parallel: 1
-      matrix: ${{ inputs.environments }}
+      matrix: 
+        environment: ${{ inputs.environments }}
 
     environment: ${{ matrix.environment }}
 
