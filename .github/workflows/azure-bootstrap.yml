@@ -59,6 +59,18 @@ jobs:
             write-host "Resource Group $($ResourceGroup.ResourceGroupName) already exists" -ForegroundColor Yellow
           }        
 
+      - name: Lock Resource Group with CanNotDelete
+        shell: pwsh
+        run: |
+          $Lock = Get-AzResourceLock -LockName "TFState" -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -ErrorAction SilentlyContinue
+
+          if ($Lock -eq $null) {
+            $Lock = New-AzResourceLock -LockName "TFState" -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -LockLevel CanNotDelete -Force
+            Write-Host "Lock $($Lock.Name) created" -ForegroundColor Green
+          } else {
+            Write-Host "Lock $($Lock.Name) already exists" -ForegroundColor Yellow
+          }  
+
       - name: Create storage account
         shell: pwsh
         run: |
@@ -79,6 +91,12 @@ jobs:
             Write-Host "Storage Account $($StorageAccount.StorageAccountName) already exists" -ForegroundColor Yellow
           }
 
+      - name: Enable blob versioning
+        shell: pwsh
+        run: |
+          Update-AzStorageBlobServiceProperty -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -StorageAccountName ${{vars.BACKEND_STORAGE_ACCOUNT_NAME}} -IsVersioningEnabled $true | Out-Null
+          Write-Host "Blob versioning updated" -ForegroundColor Green
+          
       - name: Reset storage account firewall settings
         uses: ./.github/actions/az-storage-account-fw
         with:
@@ -93,12 +111,6 @@ jobs:
           storage_account_name: ${{vars.BACKEND_STORAGE_ACCOUNT_NAME}} 
           resource_group_name: ${{vars.BACKEND_RESOUCE_GROUP_NAME}}
 
-      - name: Enable blob versioning
-        shell: pwsh
-        run: |
-          Update-AzStorageBlobServiceProperty -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -StorageAccountName ${{vars.BACKEND_STORAGE_ACCOUNT_NAME}} -IsVersioningEnabled $true | Out-Null
-          Write-Host "Blob versioning updated" -ForegroundColor Green
-
       - name: Create container
         shell: pwsh
         run: |
@@ -111,18 +123,6 @@ jobs:
           } else {
             Write-Host "Container $($Container.Name) already exists" -ForegroundColor Yellow
           }
-
-      - name: Lock Resource Group with CanNotDelete
-        shell: pwsh
-        run: |
-          $Lock = Get-AzResourceLock -LockName "TFState" -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -ErrorAction SilentlyContinue
-
-          if ($Lock -eq $null) {
-            $Lock = New-AzResourceLock -LockName "TFState" -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -LockLevel CanNotDelete -Force
-            Write-Host "Lock $($Lock.Name) created" -ForegroundColor Green
-          } else {
-            Write-Host "Lock $($Lock.Name) already exists" -ForegroundColor Yellow
-          }  
 
       - name: Remove runner IP from storage account firewall
         if: always()
