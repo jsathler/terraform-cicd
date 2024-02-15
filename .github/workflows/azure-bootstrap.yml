@@ -22,7 +22,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix: 
-        environment: ${{ inputs.environments }}
+        environment: ${{ fromJson(inputs.environments) }}
 
     environment: ${{ matrix.environment }}
 
