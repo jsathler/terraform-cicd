@@ -8,7 +8,7 @@ on:
         description: The github environments to create the tfstate resources
         type: string
         required: true
-        default: "[dev,qa,prd]"
+        default: '[dev,qa,prd]'
       container_name:
         description: TFstate container name
         type: string
