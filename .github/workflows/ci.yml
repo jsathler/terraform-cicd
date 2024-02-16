@@ -18,10 +18,6 @@ on:
         type: string
         required: false
         default: 'false'
-      working_directory:
-        description: Terraform working directory
-        type: string
-        default: 'Terraform'
 
 permissions:
   actions: write # This is required to read/write workflows, workflow runs and artifacts.
@@ -31,6 +27,7 @@ permissions:
 
 defaults:
   run:
+    working-directory: "Terraform"
     shell: bash
 
 jobs:
@@ -52,7 +49,7 @@ jobs:
       uses: diillson/auto-pull-request@v1.0.1
       with:
         destination_branch: "main"
-        pr_title: "[auto] Terraform plan (${{ github.action_ref }} ${{ github.workflow}} - ${{ github.run_number }})"
+        pr_title: "[auto] Terraform plan (${{ github.action_ref }} - ${{ github.workflow}} - ${{ github.run_number }})"
         pr_body: |                                        
           Please check the Terraform plan(s) bellow before approving this pull request.
 
@@ -102,7 +99,7 @@ jobs:
       action: plan
       tf_version: ${{ inputs.tf_version }}
       destroy: ${{ inputs.destroy }}
-      working_directory: ${{ inputs.working_directory }}
+      working_directory: "Terraform"
       tf_plan_extra: -var-file="./global.tfvars" -var-file="./tfvars/${{ matrix.environment }}.tfvars"
       environment: ${{ matrix.environment }}
       pr_number: ${{ needs.open-pull-request.outputs.pr_number }}
@@ -130,6 +127,7 @@ jobs:
         path: ${{ inputs.working_directory }}
 
     - name: Create PR comment content
+      working-directory: ${{ inputs.working_directory }}
       run: |
         ls -la  
         echo "PR_BODY<<EOF" >> $GITHUB_ENV
@@ -138,7 +136,7 @@ jobs:
         Destroy: ${{ inputs.destroy }} >> $GITHUB_ENV
   
         ``` >> $GITHUB_ENV
-        cat ./${{ inputs.working_directory }}/${{ matrix.environment }}.txt >> $GITHUB_ENV
+        cat ./${{ matrix.environment }}.txt >> $GITHUB_ENV
         echo "EOF" >> $GITHUB_ENV    
 
     - name: Pull request comment - 'Plan output'
