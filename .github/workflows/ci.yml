@@ -52,7 +52,7 @@ jobs:
       uses: diillson/auto-pull-request@v1.0.1
       with:
         destination_branch: "main"
-        pr_title: "[auto] Terraform plan (${{ github.action }} - ${{ github.run_id }})"
+        pr_title: "[auto] Terraform plan (${{ github.action }} - ${{ github.run_id }})" ######FIX
         pr_body: |                                        
           Please check the Terraform plan(s) bellow before approving this pull request.
 
@@ -128,6 +128,11 @@ jobs:
       with:
         name: ${{ matrix.environment }}.plan
         path: ${{ inputs.working_directory }}
+
+    - name: List contents II
+      run: |
+        ls -la
+        cat ${{ matrix.environment }}.plan
 
     - name: Pull request comment - 'Plan output'
       uses: peter-evans/create-or-update-comment@v3
