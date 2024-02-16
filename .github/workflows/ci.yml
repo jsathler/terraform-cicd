@@ -94,7 +94,7 @@ jobs:
 
   comment-pull-request:
     runs-on: 'ubuntu-latest'
-    name: Code Analysis
+    name: Comment on Pull Request
     needs: [terraform-plan]
 
     if: github.ref_name != 'main'
