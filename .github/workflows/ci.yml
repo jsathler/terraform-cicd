@@ -126,25 +126,32 @@ jobs:
     - name: Download the Terraform Plan Artifact
       uses: actions/download-artifact@v4
       with:
-        name: ${{ matrix.environment }}.plan
+        name: ${{ matrix.environment }}.txt
         path: ${{ inputs.working_directory }}
 
-    - name: List contents II
+    - name: Create PR comment content
       run: |
-        ls -la
-        cat ${{ matrix.environment }}.plan
+        echo "PR_BODY<<EOF" >> $GITHUB_ENV
+        Terraform Plan: Completed 🌟 >> $GITHUB_ENV
+        Environment: ${{ matrix.environment }} >> $GITHUB_ENV
+        Destroy: ${{ inputs.destroy }} >> $GITHUB_ENV
+  
+        ``` >> $GITHUB_ENV
+        cat ${{ inputs.working_directory }}/${{ matrix.environment }}.txt >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV    
 
     - name: Pull request comment - 'Plan output'
       uses: peter-evans/create-or-update-comment@v3
       with:
         issue-number: ${{ needs.open-pull-request.outputs.pr_number }}
-        body: |
-          Terraform Plan: Completed 🌟
-          Environment: ${{ matrix.environment }}
-          Destroy: ${{ inputs.destroy }}
+        body: ${{ env.PR_BODY }}
+        # body: |
+        #   Terraform Plan: Completed 🌟
+        #   Environment: ${{ matrix.environment }}
+        #   Destroy: ${{ inputs.destroy }}
 
-          ```
-          ${{ inputs.working_directory }}/${{ matrix.environment }}.plan 
+        #   ```
+        #   ${{ inputs.working_directory }}/${{ matrix.environment }}.txt 
 
     - name: Pull request comment - 'If any step failed'
       if: failure()

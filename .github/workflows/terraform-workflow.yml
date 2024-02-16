@@ -105,17 +105,17 @@ jobs:
       if: ${{ inputs.action == 'plan' || inputs.action == 'both' }}
       id: show
       run: |
-        echo "plan<<EOF" >> $GITHUB_OUTPUT
-        terraform show -no-color ${{ inputs.environment }}.plan >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        # echo "plan<<EOF" >> $GITHUB_OUTPUT
+        # terraform show -no-color ${{ inputs.environment }}.plan >> $GITHUB_OUTPUT
+        # echo "EOF" >> $GITHUB_OUTPUT
         terraform show -no-color ${{ inputs.environment }}.plan > ${{ inputs.environment }}.txt
 
     - name: Artifact - Upload TF Plan
       if: ${{ inputs.action == 'plan' || inputs.action == 'both' }}
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ inputs.environment }}.plan
-        path: ${{ inputs.working_directory }}/${{ inputs.environment }}.plan
+        name: ${{ inputs.environment }}.txt
+        path: ${{ inputs.working_directory }}/${{ inputs.environment }}.txt
 
     - name: Terraform - apply
       if: ${{ inputs.action == 'apply' || inputs.action == 'both' }}
