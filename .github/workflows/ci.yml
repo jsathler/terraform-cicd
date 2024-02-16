@@ -38,6 +38,8 @@ jobs:
     runs-on: 'ubuntu-latest'
     name: Create Pull Request
 
+    if: github.ref_name != 'main'
+
     outputs:
       pr_number: ${{ steps.create-pr.outputs.pr_number }}
 
@@ -48,6 +50,7 @@ jobs:
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         target_branch: main
+        allow_no_diff: true
         title: "[auto] Terraform plan (${{ github.action }} - ${{ github.run_id }})"
         body: "Please check the Terraform plan(s) bellow before approving this pull request."
 
