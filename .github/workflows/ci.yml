@@ -41,7 +41,7 @@ jobs:
       pr_number: ${{ steps.open-pr.outputs.pr_number }}
 
     steps:
-    - name: Checkout Working Directory
+    - name: Checkout Code
       uses: actions/checkout@v4   
             
     - name: Open pull request
@@ -49,7 +49,7 @@ jobs:
       uses: diillson/auto-pull-request@v1.0.1
       with:
         destination_branch: "main"
-        pr_title: "[auto] Terraform plan (${{ github.action_ref }} - ${{ github.workflow}} - ${{ github.run_number }})"
+        pr_title: "[auto] Terraform plan (Workflow: ${{ github.workflow}} - Job ID: ${{ github.run_number }})"
         pr_body: |                                        
           Please check the Terraform plan(s) bellow before approving this pull request.
 
@@ -68,6 +68,9 @@ jobs:
     if: github.ref_name != 'main'
 
     steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4   
+    
     - name: Code analysis tests
       run: | 
         echo "Code analysis tests"
