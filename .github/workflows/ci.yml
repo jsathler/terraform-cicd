@@ -129,6 +129,11 @@ jobs:
         name: ${{ matrix.environment }}.plan
         path: ${{ inputs.working_directory }}
 
+    - name: List contents II
+      run: |
+        ls -la
+        cat ${{ matrix.environment }}.plan
+
     - name: Pull request comment - 'Plan output'
       uses: peter-evans/create-or-update-comment@v3
       with:
