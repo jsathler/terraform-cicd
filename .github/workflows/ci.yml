@@ -34,9 +34,9 @@ defaults:
     shell: bash
 
 jobs:
-  create-pull-request:
+  open-pull-request:
     runs-on: 'ubuntu-latest'
-    name: Create Pull Request
+    name: Open Pull Request
 
     if: github.ref_name != 'main'
 
@@ -47,7 +47,7 @@ jobs:
     - name: Checkout Working Directory
       uses: actions/checkout@v4   
             
-    - name: Create pull request
+    - name: Open pull request
       id: open-pr
       uses: diillson/auto-pull-request@v1.0.1
       with:
@@ -60,23 +60,25 @@ jobs:
       run: echo ${{steps.open-pr.outputs.pr_number}}
     - name: output-created
       run: echo ${{steps.open-pr.outputs.pr_created}}
-      
+
   code-analysis:
     runs-on: 'ubuntu-latest'
     name: Code Analysis
-    needs: [create-pull-request]
+    needs: [open-pull-request]
 
     if: github.ref_name != 'main'
 
     steps:
     - name: Code analysis tests
-      run: echo "Code analysis tests"
+      run: | 
+        echo "Code analysis tests"
+        echo "PR Number: ${{needs.open-pull-request.outputs.pr_number}}"
 
     - name: Pull request comment - 'If any step failed'
       if: failure()
       uses: peter-evans/create-or-update-comment@v3
       with:
-        issue-number: ${{ needs.create-pull-request.outputs.pr_number }}
+        issue-number: ${{ needs.open-pull-request.outputs.pr_number }}
         body: |
           Code analysis failed, please check the logs ❌          
 
@@ -101,7 +103,7 @@ jobs:
       backend_resouce_group_name: ${{ vars.BACKEND_RESOUCE_GROUP_NAME }}
       tf_plan_extra: -var-file="./global.tfvars" -var-file="./tfvars/${{ matrix.environment }}.tfvars"
       environment: ${{ matrix.environment }}
-      pr_number: ${{ needs.create-pull-request.outputs.pr_number }}
+      pr_number: ${{ needs.open-pull-request.outputs.pr_number }}
 
   comment-pull-request:
     runs-on: 'ubuntu-latest'
@@ -126,7 +128,7 @@ jobs:
     - name: Pull request comment - 'Plan output'
       uses: peter-evans/create-or-update-comment@v3
       with:
-        issue-number: ${{ needs.create-pull-request.outputs.pr_number }}
+        issue-number: ${{ needs.open-pull-request.outputs.pr_number }}
         body: |
           Terraform Plan: Completed 🌟
           Environment: ${{ matrix.environment }}
@@ -139,7 +141,7 @@ jobs:
       if: failure()
       uses: peter-evans/create-or-update-comment@v3
       with:
-        issue-number: ${{ needs.create-pull-request.outputs.pr_number }}
+        issue-number: ${{ needs.open-pull-request.outputs.pr_number }}
         body: |
           Terraform workflow failed for ${{ inputs.environment }} environment, please check the logs ❌               
           ```
