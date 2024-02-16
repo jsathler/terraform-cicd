@@ -106,9 +106,9 @@ jobs:
       id: show
       run: |
         echo "plan<<EOF" >> $GITHUB_OUTPUT
-        terraform show -no-color tf.plan >> $GITHUB_OUTPUT
+        terraform show -no-color ${{ inputs.environment }}.plan >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
-        terraform show -no-color tf.plan > ${{ inputs.environment }}.txt
+        terraform show -no-color ${{ inputs.environment }}.plan > ${{ inputs.environment }}.txt
 
     - name: Artifact - Upload TF Json Plan
       if: ${{ inputs.action == 'plan' || inputs.action == 'both' }}
@@ -122,7 +122,7 @@ jobs:
       id: apply
       run: |
         echo "apply<<EOF" >> $GITHUB_OUTPUT
-        terraform apply -input=false -no-color tf.plan | tee -a $GITHUB_OUTPUT
+        terraform apply -input=false -no-color ${{ inputs.environment }}.plan | tee -a $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT      
         {
           echo 'terraform-output<<EOF'
