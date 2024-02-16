@@ -31,7 +31,6 @@ permissions:
 
 defaults:
   run:
-    working-directory: ${{ inputs.working_directory }}
     shell: bash
 
 jobs:
@@ -123,7 +122,7 @@ jobs:
           Destroy: ${{ inputs.destroy }}
 
           ```
-          ${{ matrix.environment }}.plan 
+          ${{ inputs.working_directory }}/${{ matrix.environment }}.plan 
 
     - name: Pull request comment - 'If any step failed'
       if: failure()
