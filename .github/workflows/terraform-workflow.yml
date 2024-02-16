@@ -1,0 +1,132 @@
+name: Terraform setup, init and plan
+on:
+  workflow_call:
+    inputs:
+      tf_version:
+        description: Terraform version to be used
+        type: string
+        default: latest
+      action:
+        description: Action to be taken. Options are plan or apply
+        type: string
+        default: plan
+      destroy:
+        description: Force Terraform to destroy the infrastructure
+        type: string
+        default: 'false'
+      backend_storage_account_name:
+        description: TF State Storage Account name
+        type: string
+        required: true
+      backend_resouce_group_name:
+        description: TF State Storage Account Resource Group name
+        type: string
+        required: true
+      working_directory:
+        description: Terraform working directory
+        type: string
+        default: '.'    
+      tf_init_extra:
+        description: Extra backend-config parameters if needed such as -backend-config=file1.tfvars
+        type: string
+        default: ''
+      tf_plan_extra:
+        description: Extra plan parameters if needed such as -var-file=file1.tfvars or -var='key=value'
+        type: string
+        default: ''
+      environment:
+        description: The environment name
+        type: string
+        required: true
+
+jobs: 
+  tf-workflow:
+    runs-on: 'ubuntu-latest'
+
+    defaults:
+      run: 
+        working-directory: ${{ inputs.working_directory }}
+        shell: bash
+
+    steps: 
+    - name: Terraform - Setup
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.tf_version }}
+        terraform_wrapper: false
+
+    - name: Add runner IP on storage account firewall
+      uses: ./.github/actions/az-storage-account-fw
+      with:
+        action: add
+        storage_account_name: ${{inputs.backend_storage_account_name}} 
+        resource_group_name: ${{inputs.backend_resouce_group_name}}
+    
+    - name: List contents
+      run: |
+        ls -la
+    
+    # move to code analysis
+    # - name: Terraform fmt
+    #   if: ${{ inputs.action == 'plan' || inputs.action == 'both' }}
+    #   run: terraform fmt -no-color -recursive
+
+    # - name: Terraform - Validate
+    #   if: ${{ inputs.action == 'plan' || inputs.action == 'both' }}
+    #   shell: bash
+    #   working-directory: ${{inputs.working_directory}}
+    #   run: |
+    #     terraform init -input=false -no-color -backend=false
+    #     terraform validate -no-color
+
+    - name: Terraform - Init
+      run: |
+        terraform init -input=false -no-color \
+        -backend-config="resource_group_name=${{inputs.backend_resouce_group_name}}" \
+        -backend-config="storage_account_name=${{inputs.backend_storage_account_name}}" \
+        -backend-config="container_name=tfstate" \
+        -backend-config="key=${{inputs.environment }}/terraform.tfstate" \
+        -backend-config="use_oidc=true" \
+        ${{ inputs.tf_init_extra == '' &&  '' || inputs.tf_init_extra }}
+
+    - name: Terraform - Plan
+      id: plan
+      run: |         
+        terraform plan ${{ inputs.destroy == 'true' && '-destroy' || '' }} -input=false -no-color -out=${{ inputs.environment }}.plan ${{ inputs.tf_plan_extra == '' &&  '' || inputs.tf_plan_extra }} 
+
+    - name: Terraform - Show plan
+      if: ${{ inputs.action == 'plan' || inputs.action == 'both' }}
+      id: show
+      run: |
+        echo "plan<<EOF" >> $GITHUB_OUTPUT
+        terraform show -no-color tf.plan >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        terraform show -no-color tf.plan > ${{ inputs.environment }}.txt
+
+    - name: Artifact - Upload TF Json Plan
+      if: ${{ inputs.action == 'plan' || inputs.action == 'both' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.environment }}.plan
+        path: ${{ inputs.working_directory }}/${{ inputs.environment }}.plan
+
+    - name: Terraform - apply
+      if: ${{ inputs.action == 'apply' || inputs.action == 'both' }}
+      id: apply
+      run: |
+        echo "apply<<EOF" >> $GITHUB_OUTPUT
+        terraform apply -input=false -no-color tf.plan | tee -a $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT      
+        {
+          echo 'terraform-output<<EOF'
+          terraform output -no-color -json
+          echo EOF
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Remove runner IP from storage account firewall
+      if: always()
+      uses: ./.github/actions/az-storage-account-fw
+      with:
+        action: remove
+        storage_account_name: ${{inputs.backend_storage_account_name}} 
+        resource_group_name: ${{inputs.backend_resouce_group_name}}        

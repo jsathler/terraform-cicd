@@ -52,7 +52,7 @@ jobs:
           $ResourceGroup = Get-AzResourceGroup -Name ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -ErrorAction SilentlyContinue
 
           if ($ResourceGroup -eq $null) {
-            $ResourceGroup = New-AzResourceGroup -Name ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -Location ${{ vars.REGION }}
+            $ResourceGroup = New-AzResourceGroup -Name ${{vars.BACKEND_RESOUCE_GROUP_NAME}} -Location ${{ vars.BACKEND_REGION }}
             Write-Host "Resource Group $($ResourceGroup.ResourceGroupName) created" -ForegroundColor Green
           } else {
             write-host "Resource Group $($ResourceGroup.ResourceGroupName) already exists" -ForegroundColor Yellow
@@ -79,7 +79,7 @@ jobs:
             $StorageAccount = New-AzStorageAccount `
               -ResourceGroupName ${{vars.BACKEND_RESOUCE_GROUP_NAME}} `
               -Name ${{vars.BACKEND_STORAGE_ACCOUNT_NAME}} `
-              -Location "${{ vars.REGION }}" `
+              -Location "${{ vars.BACKEND_REGION }}" `
               -SkuName Standard_GZRS `
               -Kind StorageV2 `
               -EnableHttpsTrafficOnly $True `
