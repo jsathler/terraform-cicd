@@ -43,12 +43,26 @@ jobs:
   tf-workflow:
     runs-on: 'ubuntu-latest'
 
+    environment: ${{ inputs.environment }}
+
     defaults:
       run: 
         working-directory: ${{ inputs.working_directory }}
         shell: bash
 
     steps: 
+    - name: Checkout Working Directory
+      uses: actions/checkout@v4   
+
+    - name: Login with Azure CLI
+      id: azure-login
+      uses: azure/login@v1
+      with:
+        client-id: ${{ vars.ARM_CLIENT_ID }}
+        tenant-id: ${{ vars.ARM_TENANT_ID }}
+        subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+        enable-AzPSSession: true
+
     - name: Terraform - Setup
       uses: hashicorp/setup-terraform@v3
       with:

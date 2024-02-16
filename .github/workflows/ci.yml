@@ -35,7 +35,6 @@ defaults:
     shell: bash
 
 jobs:
-
   create-pull-request:
     runs-on: 'ubuntu-latest'
     name: Create Pull Request
@@ -72,11 +71,33 @@ jobs:
         body: |
           Code analysis failed, please check the logs ❌          
 
+  #Call reusable workflow
   terraform-plan:
-    runs-on: 'ubuntu-latest'
     name: Terraform plan
     needs: [code-analysis]
-    
+
+    if: github.ref_name != 'main'
+
+    strategy:
+      matrix: 
+        environment: ${{ fromJson(inputs.environments) }}
+
+    uses: ./.github/workflows/terraform-workflow.yml@main
+    with:
+      action: plan
+      tf_version: ${{ inputs.tf_version }}
+      destroy: ${{ inputs.destroy }}
+      working_directory: ${{ inputs.working_directory }}
+      backend_storage_account_name: ${{ vars.BACKEND_STORAGE_ACCOUNT_NAME }}
+      backend_resouce_group_name: ${{ vars.BACKEND_RESOUCE_GROUP_NAME }}
+      tf_plan_extra: -var-file="./global.tfvars" -var-file="./tfvars/${{ matrix.environment }}.tfvars"
+      environment: ${{ matrix.environment }}
+
+  comment-pull-request:
+    runs-on: 'ubuntu-latest'
+    name: Code Analysis
+    needs: [terraform-plan]
+
     if: github.ref_name != 'main'
 
     strategy:
@@ -86,31 +107,6 @@ jobs:
     environment: ${{ matrix.environment }}
 
     steps:
-    - name: Checkout Working Directory
-      uses: actions/checkout@v4   
-
-    - name: Login with Azure CLI
-      id: azure-login
-      uses: azure/login@v1
-      with:
-        client-id: ${{ vars.ARM_CLIENT_ID }}
-        tenant-id: ${{ vars.ARM_TENANT_ID }}
-        subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
-        enable-AzPSSession: true
-
-    - name: Terraform workflow
-      uses: ./.github/workflows/terraform-workflow.yml@main
-      id: tf-workflow
-      with:
-        action: plan
-        tf_version: ${{ inputs.tf_version }}
-        destroy: ${{ inputs.destroy }}
-        working_directory: ${{ inputs.working_directory }}
-        backend_storage_account_name: ${{ vars.BACKEND_STORAGE_ACCOUNT_NAME }}
-        backend_resouce_group_name: ${{ vars.BACKEND_RESOUCE_GROUP_NAME }}
-        tf_plan_extra: -var-file="./global.tfvars" -var-file="./tfvars/${{ matrix.environment }}.tfvars"
-        environment: ${{ matrix.environment }}
-
     - name: Download the Terraform Plan Artifact
       uses: actions/download-artifact@v4
       with:
