@@ -49,13 +49,19 @@ jobs:
             
     - name: Create pull request
       id: create-pr
-      uses: devops-infra/action-pull-request@v0.5.5
+      # uses: devops-infra/action-pull-request@v0.5.5
+      # with:
+      #   github_token: ${{ secrets.GITHUB_TOKEN }}
+      #   target_branch: main
+      #   allow_no_diff: true
+      #   title: "[auto] Terraform plan (${{ github.action }} - ${{ github.run_id }})"
+      #   body: "Please check the Terraform plan(s) bellow before approving this pull request."
+      uses: diillson/auto-pull-request@v1.0.1
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        target_branch: main
-        allow_no_diff: true
-        title: "[auto] Terraform plan (${{ github.action }} - ${{ github.run_id }})"
-        body: "Please check the Terraform plan(s) bellow before approving this pull request."
+        destination_branch: "main"
+        pr_title: "[auto] Terraform plan (${{ github.action }} - ${{ github.run_id }})"
+        pr_body: |                                        
+          "Please check the Terraform plan(s) bellow before approving this pull request."      
 
   code-analysis:
     runs-on: 'ubuntu-latest'
