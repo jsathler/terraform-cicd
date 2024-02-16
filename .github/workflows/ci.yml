@@ -127,18 +127,17 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: ${{ matrix.environment }}.txt
-        path: ${{ inputs.working_directory }}
+        #path: ${{ inputs.working_directory }}
 
     - name: Create PR comment content
-      working-directory: ${{ inputs.working_directory }}
       run: |
         ls -la  
         echo "PR_BODY<<EOF" >> $GITHUB_ENV
-        Terraform Plan: Completed 🌟 >> $GITHUB_ENV
-        Environment: ${{ matrix.environment }} >> $GITHUB_ENV
-        Destroy: ${{ inputs.destroy }} >> $GITHUB_ENV
+        echo Terraform Plan: Completed 🌟 >> $GITHUB_ENV
+        echo Environment: ${{ matrix.environment }} >> $GITHUB_ENV
+        echo Destroy: ${{ inputs.destroy }} >> $GITHUB_ENV
   
-        ``` >> $GITHUB_ENV
+        echo ``` >> $GITHUB_ENV
         cat ./${{ matrix.environment }}.txt >> $GITHUB_ENV
         echo "EOF" >> $GITHUB_ENV    
 
