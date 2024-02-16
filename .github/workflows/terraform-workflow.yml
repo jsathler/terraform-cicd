@@ -38,6 +38,10 @@ on:
         description: The environment name
         type: string
         required: true
+      pr_number:
+        description: The Pull Request number to comment on
+        type: string
+        required: true
 
 jobs: 
   tf-workflow:
@@ -143,4 +147,13 @@ jobs:
       with:
         action: remove
         storage_account_name: ${{inputs.backend_storage_account_name}} 
-        resource_group_name: ${{inputs.backend_resouce_group_name}}        
+        resource_group_name: ${{inputs.backend_resouce_group_name}}
+
+    - name: Pull request comment - 'If any step failed'
+      if: failure()
+      uses: peter-evans/create-or-update-comment@v3
+      with:
+        issue-number: ${{ inputs.pr_number }}
+        body: |
+          Terraform workflow failed for environment ${{ inputs.environment }}, please check the logs ❌               
+          ```        

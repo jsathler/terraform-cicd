@@ -103,6 +103,7 @@ jobs:
       backend_resouce_group_name: ${{ vars.BACKEND_RESOUCE_GROUP_NAME }}
       tf_plan_extra: -var-file="./global.tfvars" -var-file="./tfvars/${{ matrix.environment }}.tfvars"
       environment: ${{ matrix.environment }}
+      pr_number: ${{ needs.create-pull-request.outputs.pr_number }}
 
   comment-pull-request:
     runs-on: 'ubuntu-latest'
