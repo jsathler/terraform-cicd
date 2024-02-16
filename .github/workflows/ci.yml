@@ -52,7 +52,7 @@ jobs:
       uses: diillson/auto-pull-request@v1.0.1
       with:
         destination_branch: "main"
-        pr_title: "[auto] Terraform plan (${{ github.action }} - ${{ github.run_id }})" ######FIX
+        pr_title: "[auto] Terraform plan (${{ github.action_ref }} ${{ github.workflow}} - ${{ github.run_number }})" ######FIX
         pr_body: |                                        
           Please check the Terraform plan(s) bellow before approving this pull request.
 
@@ -131,13 +131,14 @@ jobs:
 
     - name: Create PR comment content
       run: |
+        ls -la  
         echo "PR_BODY<<EOF" >> $GITHUB_ENV
         Terraform Plan: Completed 🌟 >> $GITHUB_ENV
         Environment: ${{ matrix.environment }} >> $GITHUB_ENV
         Destroy: ${{ inputs.destroy }} >> $GITHUB_ENV
   
         ``` >> $GITHUB_ENV
-        cat ${{ inputs.working_directory }}/${{ matrix.environment }}.txt >> $GITHUB_ENV
+        cat ./${{ inputs.working_directory }}/${{ matrix.environment }}.txt >> $GITHUB_ENV
         echo "EOF" >> $GITHUB_ENV    
 
     - name: Pull request comment - 'Plan output'
