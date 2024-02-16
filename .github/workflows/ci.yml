@@ -64,7 +64,8 @@ jobs:
   code-analysis:
     runs-on: 'ubuntu-latest'
     name: Code Analysis
-    needs: [open-pull-request]
+    needs: 
+      - open-pull-request
 
     if: github.ref_name != 'main'
 
@@ -72,7 +73,7 @@ jobs:
     - name: Code analysis tests
       run: | 
         echo "Code analysis tests"
-        echo "PR Number: ${{needs.open-pull-request.outputs.pr_number}}"
+        echo "PR Number: ${{ needs.open-pull-request.outputs.pr_number }}"
 
     - name: Pull request comment - 'If any step failed'
       if: failure()
@@ -85,7 +86,9 @@ jobs:
   #Call reusable workflow
   terraform-plan:
     name: Terraform plan
-    needs: [code-analysis]
+    needs:
+      - open-pull-request
+      - code-analysis      
 
     if: github.ref_name != 'main'
 
@@ -108,7 +111,9 @@ jobs:
   comment-pull-request:
     runs-on: 'ubuntu-latest'
     name: Comment on Pull Request
-    needs: [terraform-plan]
+    needs: 
+      - open-pull-request
+      - terraform-plan      
 
     if: github.ref_name != 'main'
 
@@ -143,5 +148,5 @@ jobs:
       with:
         issue-number: ${{ needs.open-pull-request.outputs.pr_number }}
         body: |
-          Terraform workflow failed for ${{ inputs.environment }} environment, please check the logs ❌               
+          Terraform workflow failed for ${{ matrix.environment }} environment, please check the logs ❌               
           ```
