@@ -41,28 +41,26 @@ jobs:
     if: github.ref_name != 'main'
 
     outputs:
-      pr_number: ${{ steps.create-pr.outputs.pr_number }}
+      pr_number: ${{ steps.open-pr.outputs.pr_number }}
 
     steps:
     - name: Checkout Working Directory
       uses: actions/checkout@v4   
             
     - name: Create pull request
-      id: create-pr
-      # uses: devops-infra/action-pull-request@v0.5.5
-      # with:
-      #   github_token: ${{ secrets.GITHUB_TOKEN }}
-      #   target_branch: main
-      #   allow_no_diff: true
-      #   title: "[auto] Terraform plan (${{ github.action }} - ${{ github.run_id }})"
-      #   body: "Please check the Terraform plan(s) bellow before approving this pull request."
+      id: open-pr
       uses: diillson/auto-pull-request@v1.0.1
       with:
         destination_branch: "main"
         pr_title: "[auto] Terraform plan (${{ github.action }} - ${{ github.run_id }})"
         pr_body: |                                        
-          "Please check the Terraform plan(s) bellow before approving this pull request."      
+          Please check the Terraform plan(s) bellow before approving this pull request.
 
+    - name: output-number
+      run: echo ${{steps.open-pr.outputs.pr_number}}
+    - name: output-created
+      run: echo ${{steps.open-pr.outputs.pr_created}}
+      
   code-analysis:
     runs-on: 'ubuntu-latest'
     name: Code Analysis
@@ -143,5 +141,5 @@ jobs:
       with:
         issue-number: ${{ needs.create-pull-request.outputs.pr_number }}
         body: |
-          Terraform workflow failed for environment ${{ matrix.environment }}, please check the logs ❌               
+          Terraform workflow failed for ${{ inputs.environment }} environment, please check the logs ❌               
           ```

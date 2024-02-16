@@ -155,5 +155,5 @@ jobs:
       with:
         issue-number: ${{ inputs.pr_number }}
         body: |
-          Terraform workflow failed for environment ${{ inputs.environment }}, please check the logs ❌               
+          Terraform workflow failed for ${{ inputs.environment }} environment, please check the logs ❌               
           ```        
