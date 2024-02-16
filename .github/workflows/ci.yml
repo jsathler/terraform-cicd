@@ -103,8 +103,6 @@ jobs:
       tf_version: ${{ inputs.tf_version }}
       destroy: ${{ inputs.destroy }}
       working_directory: ${{ inputs.working_directory }}
-      backend_storage_account_name: ${{ vars.BACKEND_STORAGE_ACCOUNT_NAME }}
-      backend_resouce_group_name: ${{ vars.BACKEND_RESOUCE_GROUP_NAME }}
       tf_plan_extra: -var-file="./global.tfvars" -var-file="./tfvars/${{ matrix.environment }}.tfvars"
       environment: ${{ matrix.environment }}
       pr_number: ${{ needs.open-pull-request.outputs.pr_number }}

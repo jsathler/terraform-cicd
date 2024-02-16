@@ -14,14 +14,6 @@ on:
         description: Force Terraform to destroy the infrastructure
         type: string
         default: 'false'
-      backend_storage_account_name:
-        description: TF State Storage Account name
-        type: string
-        required: true
-      backend_resouce_group_name:
-        description: TF State Storage Account Resource Group name
-        type: string
-        required: true
       working_directory:
         description: Terraform working directory
         type: string
@@ -77,8 +69,8 @@ jobs:
       uses: ./.github/actions/az-storage-account-fw
       with:
         action: add
-        storage_account_name: ${{inputs.backend_storage_account_name}} 
-        resource_group_name: ${{inputs.backend_resouce_group_name}}
+        storage_account_name: ${{ vars.BACKEND_STORAGE_ACCOUNT_NAME }} 
+        resource_group_name: ${{ vars.BACKEND_RESOUCE_GROUP_NAME }}
     
     - name: List contents
       run: |
@@ -100,8 +92,8 @@ jobs:
     - name: Terraform - Init
       run: |
         terraform init -input=false -no-color \
-        -backend-config="resource_group_name=${{inputs.backend_resouce_group_name}}" \
-        -backend-config="storage_account_name=${{inputs.backend_storage_account_name}}" \
+        -backend-config="storage_account_name=${{ vars.BACKEND_STORAGE_ACCOUNT_NAME }}" \
+        -backend-config="resource_group_name=${{ vars.BACKEND_RESOUCE_GROUP_NAME }}" \        
         -backend-config="container_name=tfstate" \
         -backend-config="key=${{inputs.environment }}/terraform.tfstate" \
         -backend-config="use_oidc=true" \
@@ -146,8 +138,8 @@ jobs:
       uses: ./.github/actions/az-storage-account-fw
       with:
         action: remove
-        storage_account_name: ${{inputs.backend_storage_account_name}} 
-        resource_group_name: ${{inputs.backend_resouce_group_name}}
+        storage_account_name: ${{ vars.backend_storage_account_name }}
+        resource_group_name: ${{ vars.backend_resouce_group_name }}
 
     - name: Pull request comment - 'If any step failed'
       if: failure()
