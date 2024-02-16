@@ -69,7 +69,7 @@ jobs:
       uses: ./.github/actions/az-storage-account-fw
       with:
         action: add
-        storage_account_name: ${{ vars.BACKEND_STORAGE_ACCOUNT_NAME }} 
+        storage_account_name: ${{ vars.BACKEND_STORAGE_ACCOUNT_NAME }}
         resource_group_name: ${{ vars.BACKEND_RESOUCE_GROUP_NAME }}
     
     - name: List contents
@@ -144,5 +144,5 @@ jobs:
       with:
         issue-number: ${{ inputs.pr_number }}
         body: |
-          Terraform workflow failed for ${{ inputs.environment }} environment, please check the logs ❌               
+          Terraform workflow failed for ${{ inputs.environment }} environment, please check the logs ❌
           ```        
